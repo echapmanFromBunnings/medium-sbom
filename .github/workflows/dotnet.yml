@@ -3,6 +3,8 @@ name: .NET - Build
 on:
   push:
     branches: [ "main" ]
+  release:
+    types: [ published ]
   pull_request:
     branches: [ "main" ]
 
@@ -22,7 +24,20 @@ jobs:
       run: dotnet restore
     - name: Build
       working-directory: ./src/fake-web-api
-      run: dotnet build --no-restore
+      run: dotnet build --no-restore -o "./out"
+    - name: Generate SBOM
+      working-directory: ./src/fake-web-api
+      run: |
+        curl -Lo $RUNNER_TEMP/sbom-tool https://github.com/microsoft/sbom-tool/releases/latest/download/sbom-tool-linux-x64
+        chmod +x $RUNNER_TEMP/sbom-tool
+        $RUNNER_TEMP/sbom-tool generate -b ./out -bc . -pn ${{ github.event.repository.name }} -pv ${{ github.run_number }} -nsb https://sbom.bunnings.com.au -V Verbose
+        ls ./out/_manifest/spdx_2.2/
+      shell: bash
+    - name: upload sbom artefacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: sbom-artefacts
+        path: ./src/fake-web-api/out/_manifest/spdx_2.2/*
     - name: Test
       working-directory: ./src/fake-web-api
       run: dotnet test --no-build --verbosity normal
